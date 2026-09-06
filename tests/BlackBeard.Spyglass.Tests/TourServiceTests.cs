@@ -218,4 +218,27 @@ public class TourServiceTests
         service.End();
         await secondTask;
     }
+
+    [Fact]
+    public async Task RaiseStart_AdvancesExactlyOnce_WhenAnEarlierPromptWasPreemptedWithoutResolving()
+    {
+        var service = new TourService(new InMemoryTourStateStore());
+        var presenter = new FakeTourPresenter();
+        service.AttachPresenter(presenter);
+        service.Register(CreateTour(steps: 1));
+
+        // First prompt is shown but never resolved (no Start/Skip click) before a second request
+        // for the same tour preempts it - the exact shape of issue #6's "request it again" repro.
+        _ = service.RequestAsync("demo");
+        var secondRunTask = service.RequestAsync("demo");
+
+        presenter.RaiseStart();
+
+        Assert.Single(presenter.ShownSteps);
+
+        service.End();
+        var result = await secondRunTask;
+
+        Assert.Equal(TourOutcome.Ended, result.Outcome);
+    }
 }
