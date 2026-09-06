@@ -30,6 +30,7 @@ public sealed class TourService : ITourService
     private bool _anyStepShownThisRun;
     private TaskCompletionSource<TourResult>? _completion;
     private CancellationTokenRegistration _cancellationRegistration;
+    private Action? _unsubscribeFromPrompt;
 
     /// <summary>
     /// Creates a <see cref="TourService"/> backed by a default <see cref="JsonFileTourStateStore"/>,
@@ -256,25 +257,32 @@ public sealed class TourService : ITourService
 
         void OnStart(object? sender, EventArgs e) => RunOnDispatcher(() =>
         {
-            Unsubscribe();
+            _unsubscribeFromPrompt?.Invoke();
+            _unsubscribeFromPrompt = null;
             PersistDontShowAgainIfChecked(tour);
             AdvanceTo(tour, 0);
         });
 
         void OnSkip(object? sender, EventArgs e) => RunOnDispatcher(() =>
         {
-            Unsubscribe();
+            _unsubscribeFromPrompt?.Invoke();
+            _unsubscribeFromPrompt = null;
             CompleteRun(TourOutcome.Skipped);
         });
 
-        void Unsubscribe()
+        presenter.StartRequested += OnStart;
+        presenter.SkipRequested += OnSkip;
+
+        // Cleared eagerly by OnStart/OnSkip above, and also from CompleteRun - covering the case
+        // where this prompt is preempted (by another Begin(), or by DetachPresenter) before the
+        // user ever resolves it. Without this, a preempted prompt's handlers stayed attached
+        // forever, so a later prompt for the same tour fired every stale handler on top of the
+        // new one (issue #6: starting the same tour a second time didn't restart it correctly).
+        _unsubscribeFromPrompt = () =>
         {
             presenter.StartRequested -= OnStart;
             presenter.SkipRequested -= OnSkip;
-        }
-
-        presenter.StartRequested += OnStart;
-        presenter.SkipRequested += OnSkip;
+        };
     }
 
     private void AdvanceTo(TourDefinition tour, int startIndex)
@@ -314,6 +322,9 @@ public sealed class TourService : ITourService
         {
             return;
         }
+
+        _unsubscribeFromPrompt?.Invoke();
+        _unsubscribeFromPrompt = null;
 
         var lastIndex = _runningIndex;
         PersistDontShowAgainIfChecked(tour);
