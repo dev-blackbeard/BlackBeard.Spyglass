@@ -8,8 +8,8 @@ namespace BlackBeard.Spyglass;
 public sealed class TourStep
 {
     /// <summary>
-    /// The id that must match a <see cref="Spyglass.TargetId"/> attached-property value on some element
-    /// in the current window for this step to spotlight it.
+    /// The id that must match a <see cref="Spyglass.TargetIdProperty"/> attached-property value on some
+    /// element in the current window for this step to spotlight it.
     /// </summary>
     public string TargetId { get; set; } = "";
 

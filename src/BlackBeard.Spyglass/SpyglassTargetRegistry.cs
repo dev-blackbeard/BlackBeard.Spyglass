@@ -8,7 +8,7 @@ using BlackBeard.Spyglass.Diagnostics;
 namespace BlackBeard.Spyglass;
 
 /// <summary>
-/// The static, weak-reference-backed registry of elements tagged with <see cref="Spyglass.TargetId"/>.
+/// The static, weak-reference-backed registry of elements tagged with <see cref="Spyglass.TargetIdProperty"/>.
 /// Internal: hosts interact with it only through the attached property.
 /// </summary>
 internal static class SpyglassTargetRegistry
