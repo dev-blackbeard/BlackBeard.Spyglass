@@ -1,0 +1,75 @@
+<UserControl
+    x:Class="Spyglass.Demo.Views.MainView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sg="http://schemas.blackbeard.dev/spyglass"
+    xmlns:views="clr-namespace:Spyglass.Demo.Views"
+    xmlns:prism="http://prismlibrary.com/"
+    prism:ViewModelLocator.AutoWireViewModel="True">
+    <Grid Margin="16">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="80" />
+        </Grid.RowDefinitions>
+
+        <StackPanel
+            Grid.Row="0"
+            Margin="0,0,0,12"
+            Orientation="Horizontal">
+            <Button
+                Margin="0,0,12,0"
+                Padding="10,4"
+                sg:Spyglass.TargetId="add-item-button"
+                Command="{Binding AddItemCommand}"
+                Content="Add item" />
+            <CheckBox
+                VerticalAlignment="Center"
+                sg:Spyglass.TargetId="settings-toggle"
+                Content="Show welcome tour every time"
+                IsChecked="{Binding ShowTourEveryTime}" />
+        </StackPanel>
+
+        <ListBox
+            Grid.Row="1"
+            Height="80"
+            Margin="0,0,0,12"
+            ItemsSource="{Binding Items}" />
+
+        <ScrollViewer
+            Grid.Row="2"
+            Margin="0,0,0,12"
+            VerticalScrollBarVisibility="Auto">
+            <StackPanel>
+                <TextBlock Margin="4" Opacity="0.6" Text="Scroll down to find the spotlighted control." />
+                <Border Height="400" />
+                <Button
+                    Margin="4"
+                    Padding="10,4"
+                    HorizontalAlignment="Left"
+                    sg:Spyglass.TargetId="scrolled-target"
+                    Content="Deep in the list" />
+                <Border Height="120" />
+            </StackPanel>
+        </ScrollViewer>
+
+        <Grid Grid.Row="3">
+            <Button
+                Padding="10,4"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Center"
+                Margin="0"
+                sg:Spyglass.TargetId="left-edge-button"
+                Content="Flush left" />
+            <views:NestedPanel HorizontalAlignment="Center" VerticalAlignment="Center" />
+            <Button
+                Padding="10,4"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                Margin="0"
+                sg:Spyglass.TargetId="corner-button"
+                Content="Bottom-right corner" />
+        </Grid>
+    </Grid>
+</UserControl>

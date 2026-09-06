@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <RootNamespace>Spyglass.Demo</RootNamespace>
+    <AssemblyName>Spyglass.Demo</AssemblyName>
+    <Product>Spyglass.Demo</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Prism.DryIoc" Version="8.1.97" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\BlackBeard.Spyglass\BlackBeard.Spyglass.csproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,24 @@
+## .NET
+bin/
+obj/
+out/
+*.user
+*.userosscache
+*.suo
+
+## Visual Studio
+.vs/
+*.VC.db
+*.VC.VC.opendb
+
+## Rider
+.idea/
+
+## Build artifacts
+artifacts/
+*.nupkg
+*.snupkg
+
+## OS
+.DS_Store
+Thumbs.db

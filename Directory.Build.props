@@ -1,0 +1,18 @@
+<Project>
+
+  <PropertyGroup>
+    <TargetFramework>net7.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <LangVersion>11</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+    <Authors>BlackBeard</Authors>
+    <Company>BlackBeard</Company>
+    <Product>BlackBeard.Spyglass</Product>
+    <Version>1.0.0</Version>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+</Project>
