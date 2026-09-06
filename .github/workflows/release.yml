@@ -1,0 +1,51 @@
+name: Publish to NuGet
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  publish:
+    runs-on: windows-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "7.0.x"
+
+      - name: Restore
+        run: dotnet restore BlackBeard.Spyglass.sln
+
+      - name: Build
+        run: dotnet build BlackBeard.Spyglass.sln --configuration Release --no-restore
+
+      - name: Test
+        run: dotnet test tests/BlackBeard.Spyglass.Tests/BlackBeard.Spyglass.Tests.csproj --configuration Release --no-build --verbosity normal
+
+      - name: Pack
+        run: dotnet pack src/BlackBeard.Spyglass/BlackBeard.Spyglass.csproj --configuration Release --no-build --output artifacts
+
+      # nuget.org Trusted Publishing: exchanges this job's GitHub OIDC token (hence
+      # `permissions: id-token: write` above) for a NuGet API key valid for ~1 hour and this run
+      # only - no long-lived API key is stored as a repo secret. The policy on nuget.org must list
+      # this exact repository and this workflow file's name (release.yml, no path).
+      - name: NuGet login (OIDC -> temporary API key)
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+
+      - name: Push to NuGet.org
+        run: dotnet nuget push "artifacts/*.nupkg" --api-key ${{ steps.login.outputs.NUGET_API_KEY }} --source https://api.nuget.org/v3/index.json --skip-duplicate
