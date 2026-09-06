@@ -83,6 +83,7 @@ await _tours.StartAsync("main-tour", showPrompt: true);
 | Scrim | `ScrimBrush` (default `#B2000000`), `IsAnimationEnabled` (`true`), `AnimationDuration` (180 ms) |
 | Spotlight | `SpotlightPadding` (`Thickness`, default 8), `SpotlightCornerRadius` (default 6), `IsSpotlightInteractive` (`false`) |
 | Callout | `CalloutGap` (12), `HostMargin` (16), `PlacementPriority` (default Left, Bottom, Right, Top), `CalloutStyle`, `CalloutTemplate` |
+| Prompt | `PromptStyle`, `PromptTemplate` |
 | Buttons | `NextButtonStyle`, `EndButtonStyle`, `StartButtonStyle`, `SkipButtonStyle`, `DontShowAgainCheckBoxStyle` |
 | Text | `NextButtonContent`, `FinishButtonContent`, `EndButtonContent`, `StartButtonContent`, `SkipButtonContent`, `DontShowAgainContent`, `StepCounterFormat` |
 | Read-only | `IsTourActive`, `CurrentStep`, `CurrentStepIndex`, `StepCount`, `CurrentPlacement` |
