@@ -223,7 +223,8 @@ public sealed class TourService : ITourService
             return Task.FromResult(new TourResult(key, TourOutcome.Completed, -1));
         }
 
-        _completion = new TaskCompletionSource<TourResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var completion = new TaskCompletionSource<TourResult>(TaskCreationOptions.RunContinuationsAsynchronously);
+        _completion = completion;
         _cancellationRegistration = ct.CanBeCanceled
             ? ct.Register(() => RunOnDispatcher(End))
             : default;
@@ -243,7 +244,10 @@ public sealed class TourService : ITourService
             AdvanceTo(tour, 0);
         }
 
-        return _completion.Task;
+        // AdvanceTo above may have already run the whole tour synchronously (e.g. every step
+        // failed to resolve), which clears the _completion field via CompleteRun - so return the
+        // local capture, not the field.
+        return completion.Task;
     }
 
     private void SubscribeToPrompt(TourDefinition tour)
