@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Automation;
@@ -78,6 +79,14 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
     /// <summary>Identifies the <see cref="CalloutTemplate"/> dependency property.</summary>
     public static readonly DependencyProperty CalloutTemplateProperty = DependencyProperty.Register(
         nameof(CalloutTemplate), typeof(DataTemplate), typeof(TourOverlay), new PropertyMetadata(null));
+
+    /// <summary>Identifies the <see cref="PromptStyle"/> dependency property.</summary>
+    public static readonly DependencyProperty PromptStyleProperty = DependencyProperty.Register(
+        nameof(PromptStyle), typeof(Style), typeof(TourOverlay), new PropertyMetadata(null));
+
+    /// <summary>Identifies the <see cref="PromptTemplate"/> dependency property.</summary>
+    public static readonly DependencyProperty PromptTemplateProperty = DependencyProperty.Register(
+        nameof(PromptTemplate), typeof(DataTemplate), typeof(TourOverlay), new PropertyMetadata(null));
 
     /// <summary>Identifies the <see cref="NextButtonStyle"/> dependency property.</summary>
     public static readonly DependencyProperty NextButtonStyleProperty = DependencyProperty.Register(
@@ -184,6 +193,8 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
     private TourService? _boundService;
     private ICommand? _nextCommand;
     private ICommand? _endCommand;
+    private ICommand? _startCommand;
+    private ICommand? _skipCommand;
 
     static TourOverlay()
     {
@@ -284,6 +295,25 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
     {
         get => (DataTemplate?)GetValue(CalloutTemplateProperty);
         set => SetValue(CalloutTemplateProperty, value);
+    }
+
+    /// <summary>An optional style applied to the start prompt's container.</summary>
+    public Style? PromptStyle
+    {
+        get => (Style?)GetValue(PromptStyleProperty);
+        set => SetValue(PromptStyleProperty, value);
+    }
+
+    /// <summary>
+    /// An optional template overriding the start prompt's default content. When set, its data context
+    /// is an internal object exposing <c>Name</c>, <c>Introduction</c>, <c>DontShowAgain</c> (a bindable,
+    /// settable bool - bind a CheckBox's <c>IsChecked</c> two-way to it), <c>StartCommand</c> and
+    /// <c>SkipCommand</c> for binding.
+    /// </summary>
+    public DataTemplate? PromptTemplate
+    {
+        get => (DataTemplate?)GetValue(PromptTemplateProperty);
+        set => SetValue(PromptTemplateProperty, value);
     }
 
     /// <summary>An optional style applied to the built-in callout's Next button.</summary>
@@ -523,7 +553,17 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
         SetValue(CurrentStepPropertyKey, null);
         SetValue(CurrentPlacementPropertyKey, null);
 
-        _promptPart.Content = BuildPromptVisual(tour);
+        _promptPart.Content = BuildPromptContent(tour);
+        if (PromptTemplate is not null)
+        {
+            _promptPart.ContentTemplate = PromptTemplate;
+        }
+
+        if (PromptStyle is not null)
+        {
+            _promptPart.Style = PromptStyle;
+        }
+
         _promptPart.Visibility = Visibility.Visible;
 
         if (_scrimPart is not null)
@@ -531,7 +571,7 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
             _scrimPart.Visibility = Visibility.Visible;
         }
 
-        Dispatcher.InvokeAsync(() => _startButtonElement?.Focus(), DispatcherPriority.Input);
+        Dispatcher.InvokeAsync(FocusStartButton, DispatcherPriority.Input);
     }
 
     private bool ShowStepCore(TourStep step, int index, int count, bool isFinal)
@@ -891,6 +931,19 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
         }
     }
 
+    private void FocusStartButton()
+    {
+        if (_startButtonElement is not null)
+        {
+            _startButtonElement.Focus();
+            Keyboard.Focus(_startButtonElement);
+        }
+        else
+        {
+            _promptPart?.MoveFocus(new TraversalRequest(FocusNavigationDirection.First));
+        }
+    }
+
     private ITourService ResolveService() => TourService ?? SpyglassLocator.Current;
 
     private object BuildStepCalloutContent(TourStep step, int index, int count, bool isFinal)
@@ -915,6 +968,24 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
         }
 
         return BuildDefaultCalloutVisual(step, index, count, isFinal);
+    }
+
+    private object BuildPromptContent(TourDefinition tour)
+    {
+        _startButtonElement = null;
+
+        if (PromptTemplate is not null)
+        {
+            _startCommand ??= new RelayCommand(() => _startRequested?.Invoke(this, EventArgs.Empty));
+            _skipCommand ??= new RelayCommand(() => _skipRequested?.Invoke(this, EventArgs.Empty));
+
+            ICommand startCommand = _startCommand;
+            ICommand skipCommand = _skipCommand;
+
+            return new PromptContext(tour.Name, tour.Introduction, startCommand, skipCommand, value => _dontShowAgain = value);
+        }
+
+        return BuildPromptVisual(tour);
     }
 
     private FrameworkElement BuildDefaultCalloutVisual(TourStep step, int index, int count, bool isFinal)
@@ -1084,6 +1155,47 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
         public ICommand NextCommand { get; }
 
         public ICommand EndCommand { get; }
+    }
+
+    private sealed class PromptContext : INotifyPropertyChanged
+    {
+        private readonly Action<bool> _onDontShowAgainChanged;
+        private bool _dontShowAgain;
+
+        public PromptContext(string name, string? introduction, ICommand startCommand, ICommand skipCommand, Action<bool> onDontShowAgainChanged)
+        {
+            Name = name;
+            Introduction = introduction;
+            StartCommand = startCommand;
+            SkipCommand = skipCommand;
+            _onDontShowAgainChanged = onDontShowAgainChanged;
+        }
+
+        public string Name { get; }
+
+        public string? Introduction { get; }
+
+        public ICommand StartCommand { get; }
+
+        public ICommand SkipCommand { get; }
+
+        public bool DontShowAgain
+        {
+            get => _dontShowAgain;
+            set
+            {
+                if (_dontShowAgain == value)
+                {
+                    return;
+                }
+
+                _dontShowAgain = value;
+                _onDontShowAgainChanged(value);
+                PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(DontShowAgain)));
+            }
+        }
+
+        public event PropertyChangedEventHandler? PropertyChanged;
     }
 
     private sealed class RelayCommand : ICommand
