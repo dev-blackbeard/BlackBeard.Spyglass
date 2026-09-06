@@ -12,6 +12,7 @@ env:
 jobs:
   publish:
     runs-on: windows-latest
+    environment: nuget
     permissions:
       id-token: write
       contents: read
@@ -40,7 +41,8 @@ jobs:
       # nuget.org Trusted Publishing: exchanges this job's GitHub OIDC token (hence
       # `permissions: id-token: write` above) for a NuGet API key valid for ~1 hour and this run
       # only - no long-lived API key is stored as a repo secret. The policy on nuget.org must list
-      # this exact repository and this workflow file's name (release.yml, no path).
+      # this exact repository, this workflow file's name (release.yml, no path), and this job's
+      # environment (nuget) - all three are checked against the token's claims.
       - name: NuGet login (OIDC -> temporary API key)
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         id: login
