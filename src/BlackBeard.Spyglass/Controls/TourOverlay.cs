@@ -172,6 +172,7 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
     private RectangleGeometry? _fullRectGeometry;
     private RectangleGeometry? _holeGeometry;
     private Rect? _lastHoleBounds;
+    private Size _lastHostSize;
 
     private FrameworkElement? _currentTarget;
     private FrameworkElement? _previousSpotlightTarget;
@@ -426,13 +427,17 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
 
         if (_scrimPart is not null)
         {
-            _fullRectGeometry = new RectangleGeometry(new Rect(new Point(0, 0), RenderSize));
+            // RenderSize is not yet meaningful this early in the layout pass (OnApplyTemplate can
+            // run before the first Arrange), so seed at zero and let OnLayoutUpdated/OnSizeChanged
+            // correct it once real layout has happened - never trust RenderSize read here directly.
+            _fullRectGeometry = new RectangleGeometry(new Rect(0, 0, 0, 0));
             _holeGeometry = new RectangleGeometry(new Rect(0, 0, 0, 0), SpotlightCornerRadius, SpotlightCornerRadius);
 
             var group = new GeometryGroup { FillRule = FillRule.EvenOdd };
             group.Children.Add(_fullRectGeometry);
             group.Children.Add(_holeGeometry);
             _scrimPart.Data = group;
+            _scrimPart.Visibility = Visibility.Collapsed;
         }
 
         if (_rootPart is not null)
@@ -521,6 +526,11 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
         _promptPart.Content = BuildPromptVisual(tour);
         _promptPart.Visibility = Visibility.Visible;
 
+        if (_scrimPart is not null)
+        {
+            _scrimPart.Visibility = Visibility.Visible;
+        }
+
         Dispatcher.InvokeAsync(() => _startButtonElement?.Focus(), DispatcherPriority.Input);
     }
 
@@ -536,6 +546,11 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
 
         _currentTarget = target;
         HidePromptVisual();
+
+        if (_scrimPart is not null)
+        {
+            _scrimPart.Visibility = Visibility.Visible;
+        }
 
         SetValue(IsTourActivePropertyKey, true);
         SetValue(CurrentStepPropertyKey, step);
@@ -554,6 +569,11 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
         HidePromptVisual();
         HideCalloutVisual();
         ResetSpotlight();
+
+        if (_scrimPart is not null)
+        {
+            _scrimPart.Visibility = Visibility.Collapsed;
+        }
 
         SetValue(IsTourActivePropertyKey, false);
         SetValue(CurrentStepPropertyKey, null);
@@ -611,15 +631,29 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
 
     private void OnSizeChanged(object sender, SizeChangedEventArgs e)
     {
-        if (_fullRectGeometry is not null)
-        {
-            _fullRectGeometry.Rect = new Rect(new Point(0, 0), RenderSize);
-        }
-
+        SyncFullRectGeometry();
         RefreshCurrentStepGeometry();
     }
 
-    private void OnLayoutUpdated(object? sender, EventArgs e) => RefreshCurrentStepGeometry();
+    private void OnLayoutUpdated(object? sender, EventArgs e)
+    {
+        SyncFullRectGeometry();
+        RefreshCurrentStepGeometry();
+    }
+
+    private void SyncFullRectGeometry()
+    {
+        if (_fullRectGeometry is null)
+        {
+            return;
+        }
+
+        var size = RenderSize;
+        if (_fullRectGeometry.Rect.Size != size)
+        {
+            _fullRectGeometry.Rect = new Rect(new Point(0, 0), size);
+        }
+    }
 
     private void RefreshCurrentStepGeometry()
     {
@@ -634,7 +668,14 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
             return;
         }
 
-        if (_lastHoleBounds is { } last && RectsClose(last, hole))
+        // Reposition whenever the hole moved OR the host itself was resized - RenderSize can still
+        // be stale the first time a step renders (see SyncFullRectGeometry), and a hole that hasn't
+        // moved must not suppress the recompute once the host size becomes valid.
+        var hostSize = RenderSize;
+        var hostSizeChanged = hostSize != _lastHostSize;
+        _lastHostSize = hostSize;
+
+        if (!hostSizeChanged && _lastHoleBounds is { } last && RectsClose(last, hole))
         {
             return;
         }
@@ -652,8 +693,18 @@ public sealed class TourOverlay : ContentControl, ITourPresenter
             return;
         }
 
+        if (RenderSize.Width <= 0 || RenderSize.Height <= 0)
+        {
+            // The overlay itself hasn't been arranged with a real size yet (can happen on the very
+            // first render right after Loaded). Computing the spotlight/callout against a zero-size
+            // host would place them wrong, so wait for the next layout pass and try again.
+            Dispatcher.InvokeAsync(() => RenderCurrentStep(step, target, index, count, isFinal), DispatcherPriority.Loaded);
+            return;
+        }
+
         var hole = ComputeHoleBounds(step, target) ?? new Rect(new Point(0, 0), RenderSize);
         _lastHoleBounds = hole;
+        _lastHostSize = RenderSize;
 
         AnimateHoleTo(hole);
 
