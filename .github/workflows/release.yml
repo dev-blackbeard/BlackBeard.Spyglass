@@ -2,6 +2,10 @@ name: Publish to NuGet
 
 on:
   workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to publish (e.g. 1.0.1). Leave blank to derive from the pushed tag (vX.Y.Z)."
+        required: false
   release:
     types: [published]
 
@@ -11,45 +15,61 @@ env:
 
 jobs:
   publish:
+    name: publish to nuget.org
+    # WPF (UseWPF=true) only builds on Windows, unlike this org's plain-class-library repos -
+    # this job can't move to ubuntu-latest.
     runs-on: windows-latest
+
+    # A deployment environment, so publishing needs whatever approval the repository's environment
+    # protection rules require. Publishing is the one irreversible step in this repository: a
+    # package version, once pushed, cannot be replaced.
     environment: nuget
     permissions:
       id-token: write
       contents: read
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history, ahead of SourceLink if that gets added later
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "7.0.x"
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ -n "${{ github.event.inputs.version }}" ]; then
+            echo "value=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Restore
         run: dotnet restore BlackBeard.Spyglass.sln
 
-      - name: Build
-        run: dotnet build BlackBeard.Spyglass.sln --configuration Release --no-restore
-
-      - name: Test
-        run: dotnet test tests/BlackBeard.Spyglass.Tests/BlackBeard.Spyglass.Tests.csproj --configuration Release --no-build --verbosity normal
+      - name: Verify before publishing
+        run: dotnet test tests/BlackBeard.Spyglass.Tests/BlackBeard.Spyglass.Tests.csproj --configuration Release --no-restore --verbosity normal
 
       - name: Pack
-        run: dotnet pack src/BlackBeard.Spyglass/BlackBeard.Spyglass.csproj --configuration Release --no-build --output artifacts
+        run: dotnet pack src/BlackBeard.Spyglass/BlackBeard.Spyglass.csproj --configuration Release --no-restore --output artifacts -p:Version=${{ steps.version.outputs.value }}
 
-      # nuget.org Trusted Publishing: exchanges this job's GitHub OIDC token (hence
-      # `permissions: id-token: write` above) for a NuGet API key valid for ~1 hour and this run
-      # only - no long-lived API key is stored as a repo secret. The policy on nuget.org must list
-      # this exact repository, this workflow file's name (release.yml, no path), and this job's
-      # environment (nuget) - all three are checked against the token's claims.
-      - name: NuGet login (OIDC -> temporary API key)
-        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
+      # Trusted Publishing: exchanges this run's GitHub OIDC token (hence `permissions: id-token:
+      # write` above) for a short-lived (1-hour) nuget.org API key, matched against a policy
+      # configured on nuget.org (owner, repo, workflow file, environment). No long-lived secret
+      # stored here - "blackbeard" is a public nuget.org username, not a credential.
+      - name: NuGet login (OIDC -> short-lived key)
         id: login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841 # v1.2.0
         with:
-          user: ${{ secrets.NUGET_USER }}
+          user: blackbeard
 
-      - name: Push to NuGet.org
+      # dotnet nuget push does not expand "*.nupkg" itself (verified live: it errors with "File
+      # does not exist" for a literal glob argument), so enumerate the actual file(s) instead of
+      # relying on shell/CLI glob expansion.
+      - name: Push
         shell: pwsh
         run: |
           $apiKey = "${{ steps.login.outputs.NUGET_API_KEY }}"
