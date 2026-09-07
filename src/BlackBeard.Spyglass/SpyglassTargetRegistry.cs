@@ -11,6 +11,14 @@ namespace BlackBeard.Spyglass;
 /// The static, weak-reference-backed registry of elements tagged with <see cref="Spyglass.TargetIdProperty"/>.
 /// Internal: hosts interact with it only through the attached property.
 /// </summary>
+/// <remarks>
+/// An entry is added only when <see cref="Spyglass.TargetIdProperty"/> is set (or changed) on an element,
+/// and removed only when that property is cleared/changed or the element is garbage collected. It is
+/// deliberately NOT removed when the element merely leaves the visual tree (its <c>Unloaded</c> event) -
+/// a Prism region can deactivate and later reactivate the very same view instance, and that instance's
+/// TargetId is never re-set on reactivation, so unregistering on Unloaded with no way back in would make
+/// the target permanently unresolvable after the view's first deactivation.
+/// </remarks>
 internal static class SpyglassTargetRegistry
 {
     private static readonly object Gate = new();
@@ -28,11 +36,10 @@ internal static class SpyglassTargetRegistry
 
             Purge(list);
 
-            var entry = new Entry(id, element);
+            var entry = new Entry(element);
             list.Add(entry);
 
             element.Loaded += entry.OnLoaded;
-            element.Unloaded += entry.OnUnloaded;
         }
     }
 
@@ -115,7 +122,6 @@ internal static class SpyglassTargetRegistry
         if (entry is not null)
         {
             element.Loaded -= entry.OnLoaded;
-            element.Unloaded -= entry.OnUnloaded;
             list.Remove(entry);
         }
 
@@ -134,14 +140,11 @@ internal static class SpyglassTargetRegistry
 
     private sealed class Entry
     {
-        public Entry(string id, FrameworkElement element)
+        public Entry(FrameworkElement element)
         {
-            Id = id;
             Reference = new WeakReference<FrameworkElement>(element);
             LoadedAtUtc = DateTime.UtcNow;
         }
-
-        public string Id { get; }
 
         public WeakReference<FrameworkElement> Reference { get; }
 
@@ -152,16 +155,5 @@ internal static class SpyglassTargetRegistry
             : throw new InvalidOperationException("The target element has been garbage collected.");
 
         public void OnLoaded(object sender, RoutedEventArgs e) => LoadedAtUtc = DateTime.UtcNow;
-
-        public void OnUnloaded(object sender, RoutedEventArgs e)
-        {
-            if (sender is FrameworkElement element)
-            {
-                lock (Gate)
-                {
-                    UnregisterCore(Id, element);
-                }
-            }
-        }
     }
 }
